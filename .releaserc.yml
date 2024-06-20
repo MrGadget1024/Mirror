@@ -1,3 +1,7 @@
+branches:
+  - name: master
+  - name: UnityPack2
+  
 verifyConditions:
   - "@semantic-release/github"
 
@@ -68,6 +72,3 @@ plugins:
       - path: "Mirror.unitypackage"
         label: "Mirror Unity Package"
         name: "Mirror-${nextRelease.version}.unitypackage"
-    - branches:
-      - name: master
-      - name: UnityPack2
