@@ -68,4 +68,6 @@ plugins:
       - path: "Mirror.unitypackage"
         label: "Mirror Unity Package"
         name: "Mirror-${nextRelease.version}.unitypackage"
-      - branches: "master, UnityPack2"
+    - branches:
+      - name: master
+      - name: UnityPack2
