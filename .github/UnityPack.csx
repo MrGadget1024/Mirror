@@ -14,56 +14,83 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Linq;
 using ICSharpCode.SharpZipLib.GZip;
 using ICSharpCode.SharpZipLib.Tar;
 using YamlDotNet.RepresentationModel;
 
-var args = Environment.GetCommandLineArgs();
+StringSplitOptions stringSplitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
 
-for (int i = 0; i < args.Length; i++)
-    Console.WriteLine($"UnityPack: args[{i}]: {args[i]}");
+var cl_args = Environment.GetCommandLineArgs();
 
-if (args.Length < 6)
+for (int i = 0; i < cl_args.Length; i++)
+    Console.WriteLine($"UnityPack: args[{i}]: {cl_args[i]}");
+
+if (cl_args.Length < 3)
 {
-    Console.WriteLine("Usage: UnityPack.csx <outputFile> <version> <source1> <destination1> [<source2> <destination2>...]");
+    Console.WriteLine("Usage: UnityPack.csx <version>");
     return;
 }
 
-string outputFile = args[2];
-string versionArg = args[3];
+// Get output file name
+string outputFile = Environment.GetEnvironmentVariable("UNITYPACK_OUTPUT") ?? "output.unitypackage";
+
+// Get assets
+static Dictionary<string, string> assets = new Dictionary<string, string>();
+var assetVars = Environment.GetEnvironmentVariables()
+    .Cast<System.Collections.DictionaryEntry>()
+    .Where(e => e.Key.ToString().StartsWith("UNITYPACK_ASSET"))
+    .ToDictionary(e => e.Key.ToString(), e => e.Value.ToString());
+
+foreach (var kvp in assetVars)
+{
+    string[] parts = kvp.Value.Split(null, stringSplitOptions);
+    string source = parts[0];
+    string destination = parts.Length > 1 ? parts[1] : "";
+    assets[source] = destination;
+}
+
+// Create dependencies dictionary
+static Dictionary<string, string> dependencies = new Dictionary<string, string>();
+var envVars = Environment.GetEnvironmentVariables()
+    .Cast<System.Collections.DictionaryEntry>()
+    .Where(e => e.Key.ToString().StartsWith("UNITYPACK_DEPENDENCY"))
+    .ToDictionary(e => e.Key.ToString(), e => e.Value.ToString());
+
+foreach (var kvp in envVars)
+{
+    string[] parts = kvp.Value.Split(null, stringSplitOptions);
+    string name = parts[0];
+    string value = parts.Length > 1 ? parts[1] : "";
+    dependencies[name] = value;
+}
+
+// Get testables
+static List<string> testables = Environment.GetEnvironmentVariable("UNITYPACK_TESTABLES")
+    ?.Split(null, stringSplitOptions)
+    .Where(t => !string.IsNullOrWhiteSpace(t))
+    .ToList() ?? new List<string>();
+
+// Get version argument
+static string versionArg = cl_args[2];
 
 if (!Path.IsPathRooted(outputFile))
     outputFile = Path.GetFullPath(outputFile);
 
 Console.WriteLine($"UnityPack: outputFile: {outputFile}");
 
-var fileMap = new Dictionary<string, string>();
+Pack();
 
-for (int i = 4; i < args.Length; i += 2)
+static void Pack()
 {
-    string fromPath = args[i];
-
-    if (!Path.IsPathRooted(args[i]))
-        fromPath = Path.GetFullPath(fromPath);
-
-    string toPath = args[i + 1];
-
-    fileMap.Add(fromPath, toPath);
-}
-
-Pack(fileMap, outputFile, versionArg);
-
-static void Pack(IDictionary<string, string> files, string outputFile, string version)
-{
-    //string randomFile = Path.GetRandomFileName();
-
-    string tempPath = Path.Combine(Path.GetTempPath(), $"Mirror-{version}");
+    string tempPath = Path.Combine(Path.GetTempPath(), $"Mirror-{versionArg}");
     Directory.CreateDirectory(tempPath);
     Console.WriteLine($"UnityPack: tempPath: {tempPath}");
 
-    AddAssets(files, tempPath);
+    AddAssets(tempPath);
 
-    AddDependeciesFile(tempPath);
+    AddDependenciesFile(tempPath);
 
     if (File.Exists(outputFile))
         File.Delete(outputFile);
@@ -74,9 +101,9 @@ static void Pack(IDictionary<string, string> files, string outputFile, string ve
     Directory.Delete(tempPath, true);
 }
 
-static void AddAssets(IDictionary<string, string> files, string tempPath)
+static void AddAssets(string tempPath)
 {
-    foreach (KeyValuePair<string, string> fileEntry in files)
+    foreach (KeyValuePair<string, string> fileEntry in assets)
     {
         if (File.Exists(fileEntry.Key))
             AddAsset(tempPath, fileEntry.Key, fileEntry.Value);
@@ -156,29 +183,27 @@ static YamlDocument GenerateMeta(string fromFile, string toFile)
     {
         // this is a folder
         return new YamlDocument(new YamlMappingNode
-                {
-                    {"guid", guid},
-                    {"fileFormatVersion", "2"},
-                    {"folderAsset", "yes"}
-                });
+            {
+                {"guid", guid},
+                {"fileFormatVersion", "2"},
+                {"folderAsset", "yes"}
+            });
     }
     else
     {
         // this is a file
         return new YamlDocument(new YamlMappingNode
-                {
-                    {"guid", guid},
-                    {"fileFormatVersion", "2"}
-                });
+            {
+                {"guid", guid},
+                {"fileFormatVersion", "2"}
+            });
     }
 }
 
 static string GetGuid(YamlDocument meta)
 {
     var mapping = (YamlMappingNode)meta.RootNode;
-
     var key = new YamlScalarNode("guid");
-
     var value = (YamlScalarNode)mapping[key];
     return value.Value;
 }
@@ -193,9 +218,7 @@ static string CreateGuid(string input)
         StringBuilder stringBuilder = new StringBuilder();
 
         foreach (byte b in hashBytes)
-        {
             stringBuilder.Append(b.ToString("X2"));
-        }
 
         return stringBuilder.ToString();
     }
@@ -214,9 +237,18 @@ static void SaveMeta(string metaPath, YamlDocument meta)
     metaFileStream.SetLength(metaFile.Length - 3 - Environment.NewLine.Length);
 }
 
-static void AddDependeciesFile(string tempPath)
+static void AddDependenciesFile(string tempPath)
 {
-    string depenciesJson = "{\"dependencies\":{\"com.unity.nuget.newtonsoft-json\":\"3.0.0\"},\"testables\":[\"com.unity.test-framework.performance\"]}";
+    //string depenciesJson = "{\"dependencies\":{\"com.unity.nuget.newtonsoft-json\":\"3.0.0\"},\"testables\":[\"com.unity.test-framework.performance\"]}";
+
+    // Serialize the JSON object
+    var jsonObject = new
+    {
+        dependencies,
+        testables
+    };
+    string depenciesJson = JsonSerializer.Serialize(jsonObject, new JsonSerializerOptions { WriteIndented = true });
+
     string depenciesPath = Path.Combine(tempPath, "packagemanagermanifest");
     Directory.CreateDirectory(depenciesPath);
     Console.WriteLine($"UnityPack: Creating dependency file at {Path.Combine(depenciesPath, "asset")}");

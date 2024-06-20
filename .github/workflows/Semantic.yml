@@ -43,3 +43,12 @@ jobs:
           --debug
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UNITYPACK_OUTPUT: "Mirror.unitypackage"
+          # source and destination separated by space
+          UNITYPACK_ASSET1: "Assets/Mirror Assets/Mirror"
+          UNITYPACK_ASSET2: "LICENSE Assets/Mirror/LICENSE"
+          # name and version or url separated by space
+          UNITYPACK_DEPENDENCY1: "com.unity.nuget.newtonsoft-json 3.0.0"
+          UNITYPACK_DEPENDENCY2: "com.edgegap.unity-servers-plugin https://github.com/edgegap/edgegap-unity-plugin.git#partner/mirror-source"
+          # package names separated by space (only one for now)
+          UNITYPACK_TESTABLES: "com.unity.test-framework.performance"
