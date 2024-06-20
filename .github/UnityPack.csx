@@ -34,7 +34,7 @@ if (cl_args.Length < 3)
 }
 
 // Get output file name
-string outputFile = Environment.GetEnvironmentVariable("UNITYPACK_OUTPUT") ?? "output.unitypackage";
+static string outputFile = Environment.GetEnvironmentVariable("UNITYPACK_OUTPUT") ?? "output.unitypackage";
 
 // Get assets
 static Dictionary<string, string> assets = new Dictionary<string, string>();
@@ -45,7 +45,7 @@ var assetVars = Environment.GetEnvironmentVariables()
 
 foreach (var kvp in assetVars)
 {
-    string[] parts = kvp.Value.Split(null, stringSplitOptions);
+    string[] parts = kvp.Value.Split(' ', stringSplitOptions);
     string source = parts[0];
     string destination = parts.Length > 1 ? parts[1] : "";
     assets[source] = destination;
@@ -60,7 +60,7 @@ var envVars = Environment.GetEnvironmentVariables()
 
 foreach (var kvp in envVars)
 {
-    string[] parts = kvp.Value.Split(null, stringSplitOptions);
+    string[] parts = kvp.Value.Split(' ', stringSplitOptions);
     string name = parts[0];
     string value = parts.Length > 1 ? parts[1] : "";
     dependencies[name] = value;
@@ -68,7 +68,7 @@ foreach (var kvp in envVars)
 
 // Get testables
 static List<string> testables = Environment.GetEnvironmentVariable("UNITYPACK_TESTABLES")
-    ?.Split(null, stringSplitOptions)
+    ?.Split(' ', stringSplitOptions)
     .Where(t => !string.IsNullOrWhiteSpace(t))
     .ToList() ?? new List<string>();
 
