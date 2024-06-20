@@ -22,7 +22,7 @@ using YamlDotNet.RepresentationModel;
 
 static StringSplitOptions stringSplitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
 
-var cl_args = Environment.GetCommandLineArgs();
+static var cl_args = Environment.GetCommandLineArgs();
 
 for (int i = 0; i < cl_args.Length; i++)
     Console.WriteLine($"UnityPack: args[{i}]: {cl_args[i]}");
