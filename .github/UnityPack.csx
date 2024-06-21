@@ -1,10 +1,13 @@
 /*
-    MIT License: The code in this script is mostly from https://github.com/MirageNet/unity-packer 
+    MIT License: The code in this script is mostly from https://github.com/MirageNet/unity-packer
+        which is the source for the nuget unity-packer from https://www.nuget.org/packages/unity-packer
     Specifically the Pack method of the Packer class, related methods, plus the Utils.GreateGUID and
     Archive.AddFilesRecursive methods, adjusted for use in a .csx script called from a GitHub Action.
 
+    Environment Variables are used instead of command line arguments to pass the output file name, assets, and dependencies.
+
     The AddDependenciesFile method is added to create a packagemanagermanifest asset file with
-    Newtonsoft.Json Unity Test Framework dependencies.
+    Newtonsoft.Json and Unity Test Framework dependencies.
 */
 
 #r "nuget: SharpZipLib, 1.4.2"
@@ -22,21 +25,35 @@ using YamlDotNet.RepresentationModel;
 
 static StringSplitOptions stringSplitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
 
-static var cl_args = Environment.GetCommandLineArgs();
+enum CmdLineArgs : int { DotNetScriptDll, ScriptFullName, Version }
+static string[] args = Environment.GetCommandLineArgs();
 
-for (int i = 0; i < cl_args.Length; i++)
-    Console.WriteLine($"UnityPack: args[{i}]: {cl_args[i]}");
+//for (int i = 0; i < args.Length; i++)
+//    Console.WriteLine($"UnityPack: args[{i}]: {args[i]}");
 
-if (cl_args.Length < 3)
+// Output from GitHub Action logging for reference
+// UnityPack: args[0]: C:\Users\runneradmin\.dotnet\tools\.store\dotnet-script\1.5.0\dotnet-script\1.5.0\tools\net8.0\any\dotnet-script.dll
+// UnityPack: args[1]: .github/UnityPack.csx
+// UnityPack: args[2]: 1.1.0
+
+if (args.Length < 3)
 {
     Console.WriteLine("Usage: UnityPack.csx <version>");
     return;
 }
 
+// Get version argument
+static string version = args[(int)CmdLineArgs.Version];
+
 // Get output file name
 static string outputFile = Environment.GetEnvironmentVariable("UNITYPACK_OUTPUT") ?? "output.unitypackage";
 
-// Get assets
+if (!Path.IsPathRooted(outputFile))
+    outputFile = Path.GetFullPath(outputFile);
+
+Console.WriteLine($"UnityPack: outputFile:{outputFile} version:{version}");
+
+// Create assets dictionary
 static Dictionary<string, string> assets = new Dictionary<string, string>();
 var assetVars = Environment.GetEnvironmentVariables()
     .Cast<System.Collections.DictionaryEntry>()
@@ -66,25 +83,17 @@ foreach (var kvp in envVars)
     dependencies[name] = value;
 }
 
-// Get testables
+// Create testables list
 static List<string> testables = Environment.GetEnvironmentVariable("UNITYPACK_TESTABLES")
     ?.Split(' ', stringSplitOptions)
     .Where(t => !string.IsNullOrWhiteSpace(t))
     .ToList() ?? new List<string>();
 
-// Get version argument
-static string versionArg = cl_args[2];
-
-if (!Path.IsPathRooted(outputFile))
-    outputFile = Path.GetFullPath(outputFile);
-
-Console.WriteLine($"UnityPack: outputFile: {outputFile}");
-
 Pack();
 
 static void Pack()
 {
-    string tempPath = Path.Combine(Path.GetTempPath(), $"Mirror-{versionArg}");
+    string tempPath = Path.Combine(Path.GetTempPath(), $"Mirror-{version}");
     Directory.CreateDirectory(tempPath);
     Console.WriteLine($"UnityPack: tempPath: {tempPath}");
 
